@@ -1,0 +1,35 @@
+name: 诸暨天气预报
+
+on:
+  schedule:
+    - cron: '0 22 * * *'   # 北京时间 06:00
+    - cron: '0 14 * * *'   # 北京时间 22:00
+  workflow_dispatch:
+
+jobs:
+  forecast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 运行预报
+        id: forecast
+        run: |
+          python3 zhuji_ensemble.py | tee forecast_output.txt
+
+      - name: 推送到 ntfy.sh
+        env:
+          NTFY_TOPIC: ${{ vars.NTFY_TOPIC || secrets.NTFY_TOPIC || 'zhuji-forecast-test' }}
+        run: |
+          FORECAST=$(cat forecast_output.txt)
+          curl -s -o /dev/null \
+            -H "Title: ⛅ 诸暨多模型集合预报" \
+            -H "Priority: 3" \
+            -H "Tags: white_sun_cloud" \
+            -d "$FORECAST" \
+            "https://ntfy.sh/$NTFY_TOPIC"
