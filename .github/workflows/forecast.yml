@@ -3,6 +3,7 @@ name: 诸暨天气预报
 on:
   schedule:
     - cron: '0 22 * * *'   # 北京时间 06:00
+    - cron: '0 4 * * *'    # 北京时间 12:00
     - cron: '0 14 * * *'   # 北京时间 22:00
   workflow_dispatch:
 
