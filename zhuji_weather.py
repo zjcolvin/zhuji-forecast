@@ -190,13 +190,14 @@ def current_from_hourly(h1, now=None):
     best_time_str = ""
     for i, t in enumerate(times):
         try:
-            h = int(str(t).split(" ")[1].split(":")[0])
-            diff = abs(h - now.hour)
+            dt_utc = datetime.datetime.strptime(str(t), "%Y-%m-%d %H:%M:%S")
+            dt_cst = dt_utc.replace(tzinfo=datetime.timezone.utc).astimezone(CST)
+            diff = abs(dt_cst.hour - now.hour)
             if diff < min_diff:
                 min_diff = diff
                 best_idx = i
-                best_time_str = str(t).replace("T", " ").split(":")[0]
-        except (IndexError, ValueError):
+                best_time_str = dt_cst.strftime("%Y-%m-%d %H")
+        except (ValueError, IndexError):
             continue
 
     if best_idx is None:
@@ -218,18 +219,6 @@ def current_from_hourly(h1, now=None):
         "obs_time": best_time_str,
     }
 
-
-def _parse_hourly_date(h1):
-    """返回 (today_str, tomorrow_str) 如 ('2026-06-05', '2026-06-06')"""
-    times = h1.get("time", [])
-    dates = set()
-    for t in times:
-        try:
-            dates.add(str(t).split(" ")[0])
-        except (IndexError, ValueError):
-            continue
-    dates = sorted(dates)
-    return dates[0] if len(dates) > 0 else "", dates[1] if len(dates) > 1 else ""
 
 
 def _avg_at_indices(lst, idxs):
@@ -258,7 +247,17 @@ def build_detail_today_tomorrow(h1):
     if not times:
         return ""
 
-    today_str, tomorrow_str = _parse_hourly_date(h1)
+    # 将 meteoblue UTC 时间转为 CST（北京时间）
+    cst_dts = []
+    for t in times:
+        try:
+            dt = datetime.datetime.strptime(str(t), "%Y-%m-%d %H:%M:%S")
+            cst_dts.append(dt.replace(tzinfo=datetime.timezone.utc).astimezone(CST))
+        except (ValueError, TypeError):
+            cst_dts.append(None)
+    cst_dates = sorted(set(dt.strftime("%Y-%m-%d") for dt in cst_dts if dt is not None))
+    today_str = cst_dates[0] if len(cst_dates) > 0 else ""
+    tomorrow_str = cst_dates[1] if len(cst_dates) > 1 else ""
     now = datetime.datetime.now(CST)
     now_date = now.strftime("%Y-%m-%d")
     now_hour = now.hour
@@ -282,12 +281,11 @@ def build_detail_today_tomorrow(h1):
             if skip_before > 0 and s < skip_before:
                 continue  # 该时段已开始，不展示
             idxs = []
-            for i, t in enumerate(times):
-                try:
-                    d, hr = str(t).split(" ")
-                    hr = int(hr.split(":")[0])
-                except (IndexError, ValueError):
+            for i, dt in enumerate(cst_dts):
+                if dt is None:
                     continue
+                d = dt.strftime("%Y-%m-%d")
+                hr = dt.hour
                 if d == date_str and s <= hr < e:
                     idxs.append(i)
 
