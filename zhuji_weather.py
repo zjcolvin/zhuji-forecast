@@ -192,7 +192,11 @@ def current_from_hourly(h1, now=None):
         try:
             dt_utc = datetime.datetime.strptime(str(t), "%Y-%m-%d %H:%M")
             dt_cst = dt_utc.replace(tzinfo=datetime.timezone.utc).astimezone(CST)
-            diff = abs(dt_cst.hour - now.hour)
+            # 同日优先，跨日大幅惩罚
+            if dt_cst.date() == now.date():
+                diff = abs(dt_cst.hour - now.hour)
+            else:
+                diff = abs(dt_cst.hour - now.hour) + 24
             if diff < min_diff:
                 min_diff = diff
                 best_idx = i
