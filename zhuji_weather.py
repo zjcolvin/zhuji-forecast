@@ -190,8 +190,7 @@ def current_from_hourly(h1, now=None):
     best_time_str = ""
     for i, t in enumerate(times):
         try:
-            t_str = str(t).replace("T", " ")
-            dt_utc = datetime.datetime.strptime(t_str, "%Y-%m-%d %H:%M:%S")
+            dt_utc = datetime.datetime.strptime(str(t), "%Y-%m-%d %H:%M")
             dt_cst = dt_utc.replace(tzinfo=datetime.timezone.utc).astimezone(CST)
             diff = abs(dt_cst.hour - now.hour)
             if diff < min_diff:
@@ -252,8 +251,7 @@ def build_detail_today_tomorrow(h1):
     cst_dts = []
     for t in times:
         try:
-            ts = str(t).replace("T", " ")
-            dt = datetime.datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+            dt = datetime.datetime.strptime(str(t), "%Y-%m-%d %H:%M")
             cst_dts.append(dt.replace(tzinfo=datetime.timezone.utc).astimezone(CST))
         except (ValueError, TypeError):
             cst_dts.append(None)
