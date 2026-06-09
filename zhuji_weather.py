@@ -260,11 +260,17 @@ def build_detail_today_tomorrow(h1):
         except (ValueError, TypeError):
             cst_dts.append(None)
     cst_dates = sorted(set(dt.strftime("%Y-%m-%d") for dt in cst_dts if dt is not None))
-    today_str = cst_dates[0] if len(cst_dates) > 0 else ""
-    tomorrow_str = cst_dates[1] if len(cst_dates) > 1 else ""
     now = datetime.datetime.now(CST)
     now_date = now.strftime("%Y-%m-%d")
     now_hour = now.hour
+    # 按当前 CST 日期在数据中定位今天/明天
+    if now_date in cst_dates:
+        today_str = now_date
+        today_idx = cst_dates.index(now_date)
+        tomorrow_str = cst_dates[today_idx + 1] if today_idx + 1 < len(cst_dates) else ""
+    else:
+        today_str = ""
+        tomorrow_str = cst_dates[0] if cst_dates else ""
 
     # 3h slots: 00-03, 03-06, 06-09, 09-12, 12-15, 15-18, 18-21, 21-24
     slot_labels = ["00-03时", "03-06时", "06-09时", "09-12时",
