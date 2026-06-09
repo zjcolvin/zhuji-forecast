@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 .env
 forecast_output.txt
+weather.env
