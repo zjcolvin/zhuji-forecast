@@ -13,7 +13,7 @@ CST = datetime.timezone(datetime.timedelta(hours=8))
 
 WEATHER_ICONS = {
     # meteoblue daily pictocode → emoji (官方定义)
-    1: "☀️", 2: "🌤️", 3: "⛅", 4: "☁️", 5: "🌫️",
+    1: "☀️", 2: "🌤️", 3: "⛅", 4: "☁️", 5: "☁️",   # 阴/多云（非雾）
     # 6-7: 阴天有雨/阵雨
     6: "🌧️", 7: "🌦️",
     # 8: 阵雨+雷暴可能
