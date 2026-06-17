@@ -1,0 +1,52 @@
+name: 诸暨天气推送
+
+on:
+  schedule:
+    - cron: '0 22 * * *'   # 06:00 CST
+    - cron: '0 4 * * *'    # 12:00 CST
+    - cron: '0 14 * * *'   # 22:00 CST
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '推送模式'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - today
+          - tomorrow
+
+jobs:
+  push-weather:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 设置 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: 安装依赖
+        run: pip install requests
+
+      - name: 判断推送模式
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "WEATHER_MODE=${{ inputs.mode }}" >> $GITHUB_ENV
+          else
+            HOUR=$(TZ='Asia/Shanghai' date +%H)
+            if [ "$HOUR" = "22" ]; then
+              echo "WEATHER_MODE=tomorrow" >> $GITHUB_ENV
+            else
+              echo "WEATHER_MODE=auto" >> $GITHUB_ENV
+            fi
+          fi
+
+      - name: 运行推送脚本
+        env:
+          GRIBSTREAM_TOKEN: ${{ secrets.GRIBSTREAM_TOKEN }}
+          METEOBLUE_KEY: ${{ secrets.METEOBLUE_KEY }}
+          ZBJ_DISCORD_WEBHOOK: ${{ secrets.ZBJ_DISCORD_WEBHOOK }}
+        run: python3 zhuji_weather.py

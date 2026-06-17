@@ -428,7 +428,96 @@ def gribstream_highlights(grib_data):
                         hints.append(f"⚠️ GribStream 提示未来 6h 累计降水 {mx:.1f}mm，注意短时强对流")
                     elif mx > 5:
                         hints.append(f"🌧️ GribStream 提示未来 6h 有 {mx:.1f}mm 降水")
-    return "\n".join(hints)
+def _today_only():
+    now = datetime.datetime.now(CST)
+    return "今天", now.strftime("%Y-%m-%d"), now.hour
+
+
+def _tomorrow_only(h1):
+    now = datetime.datetime.now(CST)
+    now_date = now.strftime("%Y-%m-%d")
+    cst_dates = sorted({_cst_date(t) for t in h1.get("time", []) if _cst_date(t)})
+    if not cst_dates:
+        return "", ""
+    if now_date in cst_dates:
+        idx = cst_dates.index(now_date)
+        return "明天", cst_dates[idx + 1] if idx + 1 < len(cst_dates) else "", 0
+    return "明天", cst_dates[0], 0
+
+
+def _cst_date(t):
+    try:
+        dt = datetime.datetime.strptime(str(t), "%Y-%m-%d %H:%M")
+        return dt.replace(tzinfo=datetime.timezone.utc).astimezone(CST).strftime("%Y-%m-%d")
+    except (ValueError, TypeError):
+        return ""
+
+
+def _build_three_hour_lines(h1, date_str, skip_before):
+    temps = h1.get("temperature", [])
+    pops = h1.get("precipitation_probability", [])
+    felts = h1.get("felttemperature", [])
+    icons = h1.get("pictocode", [])
+    precips = h1.get("precipitation", [])
+    times = h1.get("time", [])
+
+    slot_labels = ["00-03时", "03-06时", "06-09时", "09-12时",
+                   "12-15时", "15-18时", "18-21时", "21-24时"]
+    slot_ranges = [(0, 3), (3, 6), (6, 9), (9, 12),
+                   (12, 15), (15, 18), (18, 21), (21, 24)]
+
+    cst_dts = [_parse_cst(t) for t in times]
+    lines = []
+    for (s, e), label in zip(slot_ranges, slot_labels):
+        if skip_before > 0 and s < skip_before:
+            continue
+        idxs = [i for i, dt in enumerate(cst_dts)
+                if dt and dt.strftime("%Y-%m-%d") == date_str and s <= dt.hour < e]
+        if not idxs:
+            continue
+
+        def _valid(lst):
+            return [lst[i] for i in idxs if i < len(lst)]
+
+        def _avg(lst, default=None):
+            valid = [float(v) for v in _valid(lst)]
+            return round(sum(valid) / len(valid), 1) if valid else default
+
+        def _mid(lst, default=0):
+            valid = _valid(lst)
+            return valid[len(valid) // 2] if valid else default
+
+        avg_t = _avg(temps)
+        avg_f = _avg(felts)
+        max_p = int(max(float(v) for v in _valid(pops))) if _valid(pops) else 0
+        avg_precip = _avg(precips)
+        icon_id = _mid(icons, 0)
+        icon = pictocode_to_icon(icon_id, avg_t, avg_precip, max_p)
+
+        precip_tag = ""
+        if max_p >= 60:
+            precip_tag = " 🔴🔴🔴"
+        elif max_p >= 40:
+            precip_tag = " 🟡🟡"
+        elif max_p >= 20:
+            precip_tag = " 🟢"
+
+        precip_detail = f" | 💧{max_p}%"
+        if avg_precip is not None and avg_precip > 0:
+            precip_detail += f" ({avg_precip}mm)"
+
+        felt_str = f" 体感{avg_f}°C" if avg_f is not None else ""
+        lines.append(f"  `{label}` {icon} {avg_t}°C{felt_str}{precip_detail}{precip_tag}")
+
+    return lines
+
+
+def _parse_cst(t):
+    try:
+        dt = datetime.datetime.strptime(str(t), "%Y-%m-%d %H:%M")
+        return dt.replace(tzinfo=datetime.timezone.utc).astimezone(CST)
+    except (ValueError, TypeError):
+        return None
 
 
 def generate_report(mb, grib):
@@ -451,6 +540,18 @@ def generate_report(mb, grib):
 
     # 当天 & 第二天 3h 详情
     detail_lines = build_detail_today_tomorrow(h1)
+    daily_only_lines = ""
+    mode = (os.environ.get("WEATHER_MODE") or "auto").strip().lower()
+    if mode == "tomorrow":
+        label, date_str, _ = _tomorrow_only(h1)
+        if label and date_str:
+            daily_only_lines = "\n".join(_build_three_hour_lines(h1, date_str, 0))
+        detail_lines = ""
+    elif mode == "today":
+        label, date_str, now_hour = _today_only()
+        if label and date_str is not None:
+            daily_only_lines = "\n".join(_build_three_hour_lines(h1, date_str, now_hour))
+        detail_lines = ""
 
     # GribStream
     grib_lines = gribstream_highlights(grib)
@@ -475,7 +576,9 @@ def generate_report(mb, grib):
 ### 🔴 当前实况
 {current}""",
     ]
-    if detail_lines:
+    if daily_only_lines:
+        parts.append(f"\n### 📊 逐3小时预报\n{daily_only_lines}")
+    elif detail_lines:
         parts.append(f"\n### 📊 今天 & 明天 · 逐3小时预报\n{detail_lines}")
     if grib_lines:
         parts.append(f"\n### ⚡ 短时预警\n{grib_lines}")
